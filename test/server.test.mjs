@@ -503,7 +503,7 @@ function loadPlugin(rpcModule) {
   const run = vm.runInThisContext(`(function (module, exports, require) {${compiled.outputText}\n})`, { filename: INDEX_PATH })
   run(module, module.exports, (id) => {
     if (id === "@opencode/plugin") return { Plugin: { define: (definition) => definition } }
-    if (id === "./rpc.ts") return rpcModule ?? { AgentDag: { id: "questline.dag" } }
+    if (id === "./rpc.ts") return rpcModule ?? { AgentDag: { id: "sidequest.dag" } }
     if (id === "./dag.mjs") return DAG
     throw new Error(`unexpected import: ${id}`)
   })
@@ -680,7 +680,7 @@ function makeHost(options = {}) {
 
 async function boot(host, rpcModule) {
   const plugin = loadPlugin(rpcModule)
-  assert.equal(plugin.id, "questline")
+  assert.equal(plugin.id, "sidequest")
   const cleanup = await plugin.setup(host.ctx)
   return { plugin, cleanup }
 }
@@ -698,7 +698,7 @@ test("plugin registers the four tools and the RPC", { skip: NO_TS }, async () =>
   assert.deepEqual(Object.keys(host.tools).sort(), ["dag_cancel", "dag_retry", "dag_start", "dag_status"])
   assert.match(host.tools.dag_start.description, /only when the user explicitly asks/)
   assert.match(host.tools.dag_start.description, /Never use it for ordinary planning/)
-  assert.equal(host.registered.id, "questline.dag")
+  assert.equal(host.registered.id, "sidequest.dag")
   assert.deepEqual(Object.keys(host.handlers).sort(), ["cancel", "retry", "snapshot"])
 })
 

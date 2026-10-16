@@ -35,8 +35,105 @@ export function newestRun(runs, sessionID) {
   return best
 }
 
+/** Runs that involve a session, as its origin or as one of its steps, newest first. */
+export function runsOf(runs, sessionID) {
+  return [...runs]
+    .filter((run) => includesSession(run, sessionID))
+    .sort((a, b) => b.createdAt - a.createdAt || b.updatedAt - a.updatedAt || (a.id < b.id ? 1 : -1))
+}
+
+/**
+ * Pages the panel can show, in the order `[` and `]` step through them. Session is OpenCode's own
+ * landing page (title, context, MCP) and Help is how to use the panel; both are always there. Graph
+ * needs a run, and Runs needs two or more.
+ */
+export function availableViews(runCount) {
+  const views = ["session"]
+  if (runCount >= 1) views.push("graph")
+  if (runCount >= 2) views.push("runs")
+  views.push("help")
+  return views
+}
+
+/** The user's pick while it is still available, else the first page, which is Session. */
+export function resolveView(views, picked) {
+  return views.includes(picked) ? picked : views[0]
+}
+
+/** Steps forward (1) or back (-1) through the views, wrapping around. */
+export function cycleView(views, current, direction) {
+  if (!views.length) return undefined
+  const at = views.indexOf(current)
+  if (at < 0) return views[0]
+  return views[(at + direction + views.length) % views.length]
+}
+
+/** The run the graph shows: the one chosen in the Runs view while it still exists, else the newest. */
+export function shownRun(runs, ui) {
+  return runs.find((run) => run.id === ui?.shownRunId) ?? runs[0]
+}
+
+/**
+ * What the focus key does. With the panel closed it opens it; with the panel open it moves the
+ * cursor into the panel, or back to the session when the panel already has it.
+ * @returns {"open" | "focus" | "leave"}
+ */
+export function focusAction({ shown, focused }) {
+  if (!shown) return "open"
+  return focused ? "leave" : "focus"
+}
+
+/**
+ * The context window use OpenCode's own sidebar shows: the tokens of the latest assistant step after
+ * the last completed compaction and before the revert boundary, as a count and, when the model is
+ * known, a percent of its context limit.
+ * @param {ReadonlyArray<any> | undefined} messages
+ * @param {ReadonlyArray<any> | undefined} models
+ * @param {string | undefined} boundary the message id a revert stopped at
+ * @returns {{ tokens: number, percent: number | undefined } | undefined}
+ */
+export function contextUsage(messages, models, boundary) {
+  if (!messages) return undefined
+  const stop = boundary ? messages.findIndex((message) => message.id === boundary) : -1
+  if (boundary && stop === -1) return undefined
+  const end = stop === -1 ? messages.length : stop
+  const compaction = messages.findLastIndex(
+    (message, index) => message.type === "compaction" && message.status === "completed" && index < end,
+  )
+  const step = messages.findLast(
+    (message, index) => message.type === "assistant" && message.tokens !== undefined && index > compaction && index < end,
+  )
+  if (!step) return undefined
+  const { input, output, reasoning, cache } = step.tokens
+  const tokens = input + output + reasoning + cache.read + cache.write
+  if (tokens <= 0) return undefined
+  const model = models?.find((item) => item.providerID === step.model?.providerID && item.id === step.model?.id)
+  const limit = model?.limit?.context
+  return { tokens, percent: limit ? Math.round((tokens / limit) * 100) : undefined }
+}
+
 export function nodeForSession(run, sessionID) {
   return run?.nodes.find((node) => node.sessionID === sessionID)
+}
+
+/**
+ * The key as the user presses it: the host's first formatted shortcut for `id`, or undefined when
+ * the host has none, for example because a binding failed to parse. A key the host does not bind is
+ * never shown.
+ * @param {(id: string) => readonly string[] | undefined} shortcuts
+ */
+export function resolveKey(shortcuts, id) {
+  return shortcuts(id)?.[0] || undefined
+}
+
+/**
+ * Where "back to the origin session" should go from the session being viewed.
+ * @returns {{ kind: "none" } | { kind: "here" } | { kind: "go", sessionID: string }}
+ */
+export function originTarget(run, sessionID) {
+  if (!run || !sessionID) return { kind: "none" }
+  if (run.sessionID === sessionID) return { kind: "here" }
+  return nodeForSession(run, sessionID) ? { kind: "go", sessionID: run.sessionID } : { kind: "none" }
 }
 
 export function shouldAutoOpen({ runStatus, dismissed, width, isOriginSession, panelOpen = false }) {
@@ -52,6 +149,35 @@ export const canRetry = (run) => run !== undefined && run.status !== "running"
 
 export function selectionOrder(run) {
   return layersOf(run?.nodes ?? []).flat().map((node) => node.id)
+}
+
+/**
+ * Spatial move over the drawn graph. left/right step along the same row of boxes; up/down go to
+ * the nearest box (by horizontal center) in the row above or below. At an edge the selection
+ * stays put. In a single-column layout up/down are simply the previous/next node.
+ * @param {{ ranges: Record<string, { start: number }>, centers: Record<string, number> } | undefined} layout
+ * @param {string | undefined} currentId
+ * @param {"up" | "down" | "left" | "right"} direction
+ */
+export function navigate(layout, currentId, direction) {
+  const ranges = layout?.ranges ?? {}
+  const centers = layout?.centers ?? {}
+  const ids = Object.keys(ranges)
+  if (!ids.length) return undefined
+  const byPosition = (a, b) => ranges[a].start - ranges[b].start || (centers[a] ?? 0) - (centers[b] ?? 0)
+  if (!currentId || !ranges[currentId]) return [...ids].sort(byPosition)[0]
+  const here = ranges[currentId].start
+  if (direction === "left" || direction === "right") {
+    const row = ids.filter((id) => ranges[id].start === here).sort(byPosition)
+    return row[row.indexOf(currentId) + (direction === "right" ? 1 : -1)] ?? currentId
+  }
+  const rows = [...new Set(ids.map((id) => ranges[id].start))].sort((a, b) => a - b)
+  const target = rows[rows.indexOf(here) + (direction === "down" ? 1 : -1)]
+  if (target === undefined) return currentId
+  const x = centers[currentId] ?? 0
+  return ids
+    .filter((id) => ranges[id].start === target)
+    .sort((a, b) => Math.abs((centers[a] ?? 0) - x) - Math.abs((centers[b] ?? 0) - x) || (centers[a] ?? 0) - (centers[b] ?? 0))[0]
 }
 
 export function moveSelection(run, currentId, delta) {
@@ -88,6 +214,10 @@ const EMPTY_UI = Object.freeze({
   interacted: false,
   selectedRunId: undefined,
   selectedNodeId: undefined,
+  view: undefined,
+  shownRunId: undefined,
+  runCursor: undefined,
+  stepId: undefined,
 })
 
 /**

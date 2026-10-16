@@ -67,7 +67,7 @@ function createController(deps: Deps) {
   const now = deps.now ?? (() => Date.now())
   const interval = deps.emitIntervalMs ?? 50
   const guardInterval = deps.guardIntervalMs ?? 2000
-  const log = deps.log ?? ((message: string, error?: unknown) => console.error(`questline: ${message}`, error ?? ""))
+  const log = deps.log ?? ((message: string, error?: unknown) => console.error(`sidequest: ${message}`, error ?? ""))
   const runs = new Map<string, Live>()
   const lastTool = new Map<string, string>()
   const originQueues = new Map<string, Promise<void>>()
@@ -349,7 +349,7 @@ function createController(deps: Deps) {
       const page = await storage.scan({ prefix: STORAGE_PREFIX, ...(after ? { after } : {}), limit: 100 })
       for (const entry of page.entries) {
         const stored = entry.value as Stored | null
-        if (!stored || stored.v !== 1 || !Array.isArray(stored.run?.nodes)) continue
+        if (stored?.v !== 1 || !Array.isArray(stored.run?.nodes)) continue
         const texts = { prompts: stored.texts?.prompts ?? {}, outputs: stored.texts?.outputs ?? {} }
         const recovered = DAG.recoverRun(stored.run, now()) as RunData
         const live = track(recovered, texts)
@@ -406,7 +406,7 @@ function createController(deps: Deps) {
 
   function finished(runId: string) {
     const live = runs.get(runId)
-    if (!live || live.run.status !== "running") return Promise.resolve()
+    if (live?.run.status !== "running") return Promise.resolve()
     return new Promise<void>((resolve) => live.waiters.push(resolve))
   }
 
@@ -545,7 +545,7 @@ const RETRY_SCHEMA = {
 const text = (content: string, metadata?: Record<string, unknown>) => ({ content, ...(metadata ? { metadata } : {}) })
 
 export default Plugin.define({
-  id: "questline",
+  id: "sidequest",
   async setup(ctx) {
     let events: { emit: (name: "updated", data: { sessionID: string; run: RunData }) => Promise<void> } | undefined
     let stream: AbortController | undefined
@@ -568,7 +568,7 @@ export default Plugin.define({
             controller.handleEvent(event as unknown as StreamEvent)
           }
         })().catch((error) => {
-          if (!current.signal.aborted) console.error("questline: event stream ended", error)
+          if (!current.signal.aborted) console.error("sidequest: event stream ended", error)
         })
       },
     })

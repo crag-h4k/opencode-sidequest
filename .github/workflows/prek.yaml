@@ -1,0 +1,49 @@
+# .github/workflows/prek.yaml
+---
+name: prek
+
+# Runs the same hooks as a local commit: linting, the type check, and the tests.
+# workflow_call-only: invoked by ci.yaml.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  prek:
+    name: prek
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PREK_VERSION: "0.5.4"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      # The typecheck and test hooks run against the installed peers.
+      - run: npm ci
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.0"
+          enable-cache: true
+
+      - name: Cache prek environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/prek
+          key: prek-${{ runner.os }}-${{ runner.arch }}-${{ env.PREK_VERSION }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            prek-${{ runner.os }}-${{ runner.arch }}-${{ env.PREK_VERSION }}-
+
+      - name: Install prek
+        run: uv tool install "prek==$PREK_VERSION"
+
+      - name: Run prek
+        run: prek run --show-diff-on-failure --color=never --all-files

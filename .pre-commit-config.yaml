@@ -1,0 +1,60 @@
+# .pre-commit-config.yaml
+# Hooks run by prek on every `git commit` (set up with `prek install --overwrite`)
+# and in CI by .github/workflows/prek.yaml. The local hooks use the project's own
+# node_modules, so run `npm ci` first.
+---
+repos:
+  # Upstream's entry scans staged content with --redact, so a CI run over all
+  # files finds nothing new; it guards what gets committed.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: [--redact]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  # Config comes from .markdownlint.yaml.
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.3
+    hooks:
+      - id: markdownlint-cli2
+
+  # Lint only: biome.jsonc turns the formatter and import sorting off, and biome-ci
+  # never writes. Keep the rev and the pinned package in step.
+  - repo: https://github.com/biomejs/pre-commit
+    rev: v2.5.15
+    hooks:
+      - id: biome-ci
+        additional_dependencies: ["@biomejs/biome@2.5.15"]
+
+  - repo: local
+    hooks:
+      - id: typecheck
+        name: tsc --noEmit
+        entry: npm run typecheck
+        language: system
+        pass_filenames: false
+        files: ^(.*\.(ts|tsx|mjs)|tsconfig\.json|package(-lock)?\.json)$
+
+      - id: test
+        name: node test
+        entry: npm test
+        language: system
+        pass_filenames: false
+        files: ^(.*\.(ts|tsx|mjs)|package(-lock)?\.json)$

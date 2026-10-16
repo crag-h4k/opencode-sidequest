@@ -40,7 +40,7 @@ export const Run = Schema.Struct({
 })
 
 export const AgentDag = Rpc.define({
-  id: "questline.dag",
+  id: "sidequest.dag",
   methods: {
     snapshot: {
       input: Schema.Struct({ sessionID: Schema.String }),

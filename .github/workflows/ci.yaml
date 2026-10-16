@@ -1,0 +1,16 @@
+# .github/workflows/ci.yaml
+---
+name: ci
+
+# Both triggers call the same reusable workflow, so there is one prek run per push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  prek:
+    uses: ./.github/workflows/prek.yaml

@@ -86,7 +86,9 @@ export function displayWidth(text) {
 /** Strips escape sequences and control characters that would corrupt a terminal row. */
 export function clean(value) {
   return String(value ?? "")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching terminal escapes is the point
     .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point
     .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, " ")
 }
 
@@ -254,12 +256,35 @@ function nodeSummary(node, now) {
   return ""
 }
 
-function boxRows(node, { boxWidth, selected, now }) {
+/** "github-copilot/gpt-6-luna" when it fits, else "gpt-6-luna"; an unset model is the host's default. */
+export function modelLabel(model, max = Infinity) {
+  if (!model) return "default model"
+  const full = clean(model)
+  if (full.length <= max) return full
+  const slash = full.indexOf("/")
+  return slash >= 0 ? full.slice(slash + 1) : full
+}
+
+/** A prerequisite that is not met yet shows an empty box; every other state keeps its step glyph. */
+export const PREREQUISITE_GLYPH = Object.freeze({ ...STATE_GLYPH, pending: "□" })
+
+/** "after ✓ a □ b": each prerequisite with its own state glyph, so a blocked step is obvious. */
+function dependencyRow(node, byId) {
+  const deps = node.dependsOn ?? []
+  if (!deps.length) return [seg("no deps", "muted")]
+  const parts = [seg("after", "muted")]
+  for (const dep of deps) {
+    const parent = byId.get(dep)
+    parts.push(seg(" "), seg(PREREQUISITE_GLYPH[parent?.state] ?? "?", STATE_ROLE[parent?.state] ?? "muted"), seg(" "), seg(clean(dep)))
+  }
+  return parts
+}
+
+function boxRows(node, { boxWidth, selected, now, byId }) {
   const inner = boxWidth - 4
   const role = STATE_ROLE[node.state] ?? "muted"
   const chars = selected ? HEAVY : ROUND
   const border = (text) => seg(text, role)
-  const deps = node.dependsOn ?? []
   const attempt = node.attempt > 1 ? ` #${node.attempt}` : ""
   const summary = nodeSummary(node, now)
   const row = (content) => [border(chars.v), seg(" "), ...fitLine(content, inner, true), seg(" "), border(chars.v)]
@@ -275,7 +300,8 @@ function boxRows(node, { boxWidth, selected, now }) {
       seg(`${STATE_GLYPH[node.state] ?? "?"} ${node.state}${attempt}`, role),
       ...(summary ? [seg(` ${summary}`, "muted")] : []),
     ]),
-    row([seg(deps.length ? `← ${deps.join(", ")}` : "start", "muted")]),
+    row([seg("◇ ", "muted"), seg(modelLabel(node.model, inner - 2), node.model ? "default" : "muted")]),
+    row(dependencyRow(node, byId)),
     [border(chars.bl + chars.h.repeat(boxWidth - 2) + chars.br)],
   ]
 }
@@ -308,9 +334,11 @@ function connectorRows(from, to, byId, columns) {
 function compactRows(layers, columns, selectedId) {
   const lines = []
   const ranges = {}
+  const centers = {}
   for (const node of layers.flat()) {
     const selected = node.id === selectedId
     ranges[node.id] = { start: lines.length, end: lines.length + 1 }
+    centers[node.id] = 0
     lines.push(
       fitLine(
         [
@@ -322,7 +350,7 @@ function compactRows(layers, columns, selectedId) {
       ),
     )
   }
-  return { lines, ranges }
+  return { lines, ranges, centers }
 }
 
 /**
@@ -330,12 +358,12 @@ function compactRows(layers, columns, selectedId) {
  * so the panel can keep the selection scrolled into view.
  * @param {any} run
  * @param {{ width?: number, selectedId?: string, now?: number }} [options]
- * @returns {{ lines: Line[], ranges: Record<string, { start: number, end: number }> }}
+ * @returns {{ lines: Line[], ranges: Record<string, { start: number, end: number }>, centers: Record<string, number> }}
  */
 export function graphLayout(run, { width = 40, selectedId, now = Date.now() } = {}) {
   const columns = Math.max(1, Math.floor(width))
   const nodes = run?.nodes ?? []
-  if (!nodes.length) return { lines: [fitLine([seg("No nodes", "muted")], columns)], ranges: {} }
+  if (!nodes.length) return { lines: [fitLine([seg("No nodes", "muted")], columns)], ranges: {}, centers: {} }
   const layers = layersOf(nodes)
   if (columns < MIN_BOX_WIDTH) return compactRows(layers, columns, selectedId)
 
@@ -343,6 +371,7 @@ export function graphLayout(run, { width = 40, selectedId, now = Date.now() } = 
   const perRow = Math.max(1, Math.floor((columns + BOX_GAP) / SLOT_WIDTH))
   const lines = []
   const ranges = {}
+  const centers = {}
   let previous = []
   for (const layer of layers) {
     const across = Math.min(perRow, layer.length)
@@ -360,8 +389,9 @@ export function graphLayout(run, { width = 40, selectedId, now = Date.now() } = 
         else lines.push([seg(fit("  · same layer", columns), "muted")])
       }
       const start = lines.length
-      const boxes = group.map((node) => boxRows(node, { boxWidth, selected: node.id === selectedId, now }))
-      for (let row = 0; row < 5; row++) {
+      const boxes = group.map((node) => boxRows(node, { boxWidth, selected: node.id === selectedId, now, byId }))
+      const height = boxes[0].length
+      for (let row = 0; row < height; row++) {
         const parts = left ? [seg(" ".repeat(left))] : []
         boxes.forEach((box, index) => {
           if (index) parts.push(seg(" ".repeat(BOX_GAP)))
@@ -369,11 +399,12 @@ export function graphLayout(run, { width = 40, selectedId, now = Date.now() } = 
         })
         lines.push(parts)
       }
-      for (const node of group) ranges[node.id] = { start, end: start + 5 }
+      for (const node of group) ranges[node.id] = { start, end: start + height }
+      for (const position of positions) centers[position.id] = position.center
       previous = positions
     }
   }
-  return { lines, ranges }
+  return { lines, ranges, centers }
 }
 
 export function renderGraph(run, options) {
@@ -429,11 +460,11 @@ export function renderHeader(run, { width = 40, now = Date.now() } = {}) {
 
 /**
  * @param {any} run
- * @param {{ now?: number, leaderHint?: string, width?: number }} [options]
+ * @param {{ now?: number, panelHint?: string, originHint?: string, width?: number }} [options]
  * @returns {Line | null}
  */
-export function renderStrip(run, { now = Date.now(), leaderHint = "<leader>d", width } = {}) {
-  if (!run || run.status !== "running") return null
+export function renderStrip(run, { now = Date.now(), panelHint, originHint, width } = {}) {
+  if (run?.status !== "running") return null
   const counts = countNodes(run)
   const build = (name, hint) => [
     seg("dag ", "muted"),
@@ -444,7 +475,8 @@ export function renderStrip(run, { now = Date.now(), leaderHint = "<leader>d", w
     seg(`${counts.completed}/${counts.total} ✓`, "success"),
     ...(counts.failed ? [seg(`  ${counts.failed}×`, "error")] : []),
     seg(`  ${formatElapsed(runElapsed(run, now))}`, "muted"),
-    ...(hint ? [seg(`   ${leaderHint} graph`, "muted")] : []),
+    ...(hint && panelHint ? [seg(`   ${panelHint} panel`, "muted")] : []),
+    ...(hint && originHint ? [seg(`  ${originHint}`, "muted")] : []),
   ]
   const name = clean(run.name || run.id)
   const full = build(name, true)
@@ -456,19 +488,325 @@ export function renderStrip(run, { now = Date.now(), leaderHint = "<leader>d", w
   return fitLine(build(fit(name, room), false), width)
 }
 
-/**
- * @param {{ running?: boolean, canOpen?: boolean, focused?: boolean, toggleHint?: string, focusHint?: string, width?: number }} [options]
- * @returns {Line}
- */
-export function renderHints({ running, canOpen, focused, toggleHint = "<leader>d", focusHint, width = 40 } = {}) {
+const VIEW_LABEL = Object.freeze({ session: "Session", graph: "Graph", runs: "Runs", help: "Help" })
+
+/** The row of view names at the top of the panel; the current one is bracketed and highlighted. */
+export function renderViewTabs(views, current, { width = 40 } = {}) {
   const columns = Math.max(1, Math.floor(width))
-  if (focused) {
-    const keys = ["j/k move", canOpen ? "enter open" : "", running ? "c cancel" : "r retry", "q close"]
-    return fitLine([seg(keys.filter(Boolean).join("  "), "muted")], columns)
+  const parts = []
+  views.forEach((view, index) => {
+    if (index) parts.push(seg("  "))
+    const label = VIEW_LABEL[view] ?? view
+    parts.push(view === current ? seg(`[${label}]`, "accent", true) : seg(label, "muted"))
+  })
+  return fitLine(parts, columns)
+}
+
+/**
+ * One line per run, newest first: name, status glyph, finished steps, failures and elapsed time.
+ * Returns each run's line range so the panel can keep the cursor in view.
+ * @param {any[]} runs
+ * @param {{ selectedId?: string, width?: number, now?: number }} [options]
+ * @returns {{ lines: Line[], ranges: Record<string, { start: number, end: number }> }}
+ */
+export function renderRuns(runs, { selectedId, width = 40, now = Date.now() } = {}) {
+  const columns = Math.max(1, Math.floor(width))
+  if (!runs?.length) return { lines: [fitLine([seg("No runs in this session", "muted")], columns)], ranges: {} }
+  const lines = []
+  const ranges = {}
+  for (const run of runs) {
+    const selected = run.id === selectedId
+    const counts = countNodes(run)
+    ranges[run.id] = { start: lines.length, end: lines.length + 1 }
+    lines.push(
+      fitLine(
+        [
+          seg(selected ? ">" : " ", "selected", true),
+          seg(" "),
+          seg(clean(run.name || run.id), selected ? "selected" : "default", selected),
+          seg(`  ${STATE_GLYPH[run.status] ?? "?"} ${run.status}`, RUN_ROLE[run.status] ?? "muted"),
+          seg(`  ${counts.completed}/${counts.total} ✓`, "success"),
+          ...(counts.failed ? [seg(`  ${counts.failed}×`, "error")] : []),
+          seg(`  ${formatElapsed(runElapsed(run, now))}`, "muted"),
+        ],
+        columns,
+        true,
+      ),
+    )
   }
-  const focus = `${focusHint ? `click or ${focusHint}` : "click"} to focus`
-  const text = [`${focus}  ${toggleHint} close`, focus, "click to focus"].find((option) => displayWidth(option) <= columns)
-  return fitLine([seg(text ?? "click to focus", "muted")], columns)
+  return { lines, ranges }
+}
+
+/**
+ * How to run a DAG, how to drive the panel, and the OpenCode keys that matter beside it. Keys are
+ * passed in already formatted, so the real key shows and never `<leader>`. A key the host does not
+ * bind is left out.
+ * @param {{ keys?: { toggle?: string, focus?: string, origin?: string },
+ *   host?: ReadonlyArray<readonly [string, string]>, width?: number }} [options]
+ * @returns {Line[]}
+ */
+export function renderHelp({ keys = {}, host = [], width = 40 } = {}) {
+  const columns = Math.max(1, Math.floor(width))
+  const lines = []
+  const heading = (text) => {
+    if (lines.length) lines.push([])
+    lines.push(fitLine([seg(text, "default", true)], columns))
+  }
+  const prose = (text, indent = 2) => {
+    for (const row of wrapText(text, Math.max(1, columns - indent), 12)) {
+      lines.push(fitLine([seg(" ".repeat(indent) + row, "muted")], columns))
+    }
+  }
+  const keyRow = (key, label) => {
+    const shown = clean(key)
+    const lead = 2 + displayWidth(shown) + 2
+    if (columns - lead >= 14) {
+      wrapText(label, columns - lead, 6).forEach((row, index) => {
+        const head = index ? [seg(" ".repeat(lead))] : [seg("  "), seg(shown, "accent", true), seg("  ")]
+        lines.push(fitLine([...head, seg(row, "muted")], columns))
+      })
+      return
+    }
+    lines.push(fitLine([seg("  "), seg(shown, "accent", true)], columns))
+    prose(label, 4)
+  }
+
+  heading("Run a DAG")
+  prose("Ask the agent for one, for example:")
+  prose('"Run a DAG that summarizes three files in parallel, then merges them."', 4)
+  prose("Give each step a model, a timeout, and a token cap so a step cannot run away. While a DAG runs, this panel opens on its graph.")
+  heading("Pages")
+  prose("Session is OpenCode's own landing page. Graph and Runs appear once a session has DAG runs.")
+  keyRow("y  o", "previous and next page, wrapping around")
+  heading("With the panel focused")
+  keyRow("hjkl ←↓↑→", "move between boxes, or scroll")
+  keyRow("enter", "show the step's conversation in the panel")
+  keyRow("c  r", "cancel a running DAG, retry a finished one")
+  keyRow("f", "toggle fullscreen")
+  keyRow("q  esc", "close the panel")
+  heading("In a step")
+  keyRow("i  enter", "write a message to the step")
+  keyRow("g", "open the step's own session")
+  keyRow("esc", "stop typing, then back to the graph")
+  heading("Open and focus")
+  if (keys.toggle) keyRow(keys.toggle, "show or hide the panel")
+  if (keys.focus) keyRow(keys.focus, "move the cursor between the session and the panel")
+  keyRow("/dag", "open the panel on the newest graph")
+  if (keys.origin) keyRow(keys.origin, "from a step, go back to the session that started the DAG")
+  keyRow("/dag-origin", "the same, as a command")
+  heading("Size")
+  prose("Drag the line on the panel's left edge to resize it. Double-click the line to reset it. The width is remembered.")
+  if (host.length) {
+    heading("OpenCode")
+    for (const [key, label] of host) keyRow(key, label)
+  }
+  return lines
+}
+
+const MCP_LABEL = Object.freeze({
+  connected: "Connected",
+  pending: "Connecting",
+  failed: "Error",
+  disabled: "Disabled",
+  needs_auth: "Sign in",
+})
+const MCP_ROLE = Object.freeze({ connected: "success", failed: "error", disabled: "muted", needs_auth: "warning" })
+
+/**
+ * OpenCode's own landing page: the session title, the context window use, and the MCP servers. The
+ * MCP title is returned apart from its rows so the panel can make it a click target that collapses
+ * them. Servers with more than two rows collapse; fewer never do.
+ * @param {{ title?: string, usage?: { tokens: number, percent?: number }, cost?: number,
+ *   servers?: ReadonlyArray<{ name: string, status: { status: string } }>, expanded?: boolean, width?: number }} [options]
+ * @returns {{ top: Line[], mcpTitle?: Line, mcpRows: Line[] }}
+ */
+export function renderSessionPage({ title, usage, cost = 0, servers = [], expanded = true, width = 40 } = {}) {
+  const columns = Math.max(1, Math.floor(width))
+  const top = []
+  const name = clean(title ?? "")
+  if (name) for (const row of wrapText(name, columns, 3)) top.push(fitLine([seg(row, "default", true)], columns))
+  if (usage || cost > 0) {
+    if (top.length) top.push([])
+    top.push(fitLine([seg("Context", "default", true)], columns))
+    if (usage) {
+      top.push(fitLine([seg(`${usage.tokens.toLocaleString("en-US")} tokens`, "muted")], columns))
+      if (usage.percent !== undefined) top.push(fitLine([seg(`${usage.percent}% used`, "muted")], columns))
+    }
+    if (cost > 0) top.push(fitLine([seg(`$${cost.toFixed(2)} spent`, "muted")], columns))
+  }
+  if (!servers.length) return { top, mcpRows: [] }
+  const collapsible = servers.length > 2
+  const open = !collapsible || expanded
+  const active = servers.filter((server) => server.status.status === "connected").length
+  const errors = servers.filter((server) => server.status.status === "failed" || server.status.status === "needs_auth").length
+  const mcpTitle = fitLine(
+    [
+      ...(collapsible ? [seg(open ? "▼ " : "▶ ")] : []),
+      seg("MCP", "default", true),
+      ...(open ? [] : [seg(` (${active} active${errors ? `, ${errors} error${errors > 1 ? "s" : ""}` : ""})`, "muted")]),
+    ],
+    columns,
+  )
+  const mcpRows = open
+    ? servers.map((server) => {
+        const state = server.status.status
+        const label = MCP_LABEL[state] ?? state
+        const room = Math.max(1, columns - 2 - displayWidth(label) - 1)
+        const shown = fit(clean(server.name), room)
+        const gap = Math.max(1, columns - 2 - displayWidth(shown) - displayWidth(label))
+        return fitLine(
+          [seg("•", MCP_ROLE[state] ?? "muted"), seg(" "), seg(shown), seg(" ".repeat(gap)), seg(label, state === "failed" ? "error" : "muted")],
+          columns,
+        )
+      })
+    : []
+  return { top, mcpTitle, mcpRows }
+}
+
+/**
+ * The top of a step opened inside the panel: its name and state, the model it was asked to use, and
+ * what went wrong if it failed.
+ * @param {any} node
+ * @param {{ width?: number, now?: number }} [options]
+ * @returns {Line[]}
+ */
+export function renderStepHeader(node, { width = 40, now = Date.now() } = {}) {
+  if (!node) return []
+  const columns = Math.max(1, Math.floor(width))
+  const role = STATE_ROLE[node.state] ?? "muted"
+  const elapsed = nodeElapsed(node, now)
+  const lines = [
+    fitLine(
+      [
+        seg(clean(node.label || node.id), "accent", true),
+        seg("  "),
+        seg(`${STATE_GLYPH[node.state] ?? "?"} ${node.state}`, role),
+        ...(node.attempt > 1 ? [seg(`  attempt ${node.attempt}`, "muted")] : []),
+        ...(elapsed === undefined ? [] : [seg(`  ${formatElapsed(elapsed)}`, "muted")]),
+      ],
+      columns,
+    ),
+    fitLine([seg(`◇ ${modelLabel(node.model, Math.max(1, columns - 2))}`, "muted")], columns),
+  ]
+  if (node.error) lines.push(...field("error", node.error, "error", columns, 3))
+  return lines
+}
+
+const TOOL_HINTS = ["command", "filePath", "path", "pattern", "query", "url", "description"]
+
+function toolSummary(input) {
+  if (!input || typeof input !== "object") return ""
+  for (const key of TOOL_HINTS) if (typeof input[key] === "string" && input[key]) return clean(input[key])
+  const first = Object.values(input).find((value) => typeof value === "string" && value)
+  return typeof first === "string" ? clean(first) : ""
+}
+
+/**
+ * A step's conversation as lines: what it was asked, what it answered, and the tools it ran. The
+ * newest `maxLines` are kept, so a long step shows its end.
+ * @param {ReadonlyArray<any> | undefined} messages
+ * @param {{ width?: number, maxLines?: number }} [options]
+ * @returns {Line[]}
+ */
+export function renderTranscript(messages, { width = 40, maxLines = 500 } = {}) {
+  const columns = Math.max(1, Math.floor(width))
+  const lines = []
+  const block = (marker, markerRole, text, role = "default") => {
+    const lead = marker ? displayWidth(marker) : 0
+    const rows = wrapText(clean(text), Math.max(1, columns - lead), 40)
+    rows.forEach((row, index) => {
+      const head = marker ? (index ? [seg(" ".repeat(lead))] : [seg(marker, markerRole, true)]) : []
+      lines.push(fitLine([...head, seg(row, role)], columns))
+    })
+  }
+  const gap = () => {
+    if (lines.length && lines.at(-1).length) lines.push([])
+  }
+  for (const message of messages ?? []) {
+    if (message.type === "user") {
+      gap()
+      block("› ", "accent", message.text ?? "")
+    } else if (message.type === "assistant") {
+      gap()
+      for (const part of message.content ?? []) {
+        if (part.type === "text" && part.text) block("", "default", part.text)
+        else if (part.type === "reasoning") lines.push(fitLine([seg("· thinking", "muted")], columns))
+        else if (part.type === "tool") {
+          const status = part.state?.status
+          const mark = status === "completed" ? "✓" : status === "error" ? "×" : "…"
+          const markRole = status === "completed" ? "success" : status === "error" ? "error" : "info"
+          const hint = toolSummary(part.state?.input)
+          lines.push(fitLine([seg("▸ ", "muted"), seg(clean(part.name), "default", true), seg(` ${mark}`, markRole), ...(hint ? [seg(` ${hint}`, "muted")] : [])], columns))
+          if (status === "error") block("  ", "error", part.state?.error?.message ?? part.state?.error?.type ?? "error", "error")
+        }
+      }
+      if (message.error) block("", "error", message.error.message ?? message.error.type ?? "error", "error")
+    } else if (message.type === "synthetic" || message.type === "system") {
+      gap()
+      block("", "muted", message.text ?? "", "muted")
+    }
+  }
+  while (lines.length && !lines.at(-1).length) lines.pop()
+  return lines.slice(-Math.max(1, maxLines))
+}
+
+/**
+ * Key reminder for the bottom of the panel. Each key and its label stay together: chips are packed
+ * left to right and a chip that does not fit moves to the next line whole, so a narrow panel never
+ * cuts a key from its label. Keys are shown as the user must press them, never as `<leader>`, and a
+ * key the host does not bind is left out.
+ * @param {{ view?: string, step?: boolean, typing?: boolean, running?: boolean, canOpen?: boolean,
+ *   canCycle?: boolean, focused?: boolean, width?: number, maxLines?: number,
+ *   keys?: { toggle?: string, focus?: string } }} [options]
+ * @returns {Line[]}
+ */
+export function renderHints({ view = "graph", step, typing, running, canOpen, canCycle, focused, keys = {}, width = 40, maxLines = 5 } = {}) {
+  const columns = Math.max(1, Math.floor(width))
+  const chips = []
+  if (focused && typing) {
+    chips.push(["enter", "send"], ["esc", "stop typing"])
+  } else if (focused && step) {
+    chips.push(["jk ↑↓", "scroll"], ["i", "message"], ["g", "open session"], ["esc", "back"], ["q", "close"])
+    if (keys.focus) chips.push([keys.focus, "session"])
+  } else if (focused) {
+    if (view === "graph") {
+      chips.push(["hjkl ←↓↑→", "move"])
+      if (canOpen) chips.push(["enter", "open step"])
+      chips.push(running ? ["c", "cancel run"] : ["r", "retry"])
+    } else if (view === "runs") {
+      chips.push(["jk ↑↓", "move"], ["enter", "show run"])
+    } else {
+      chips.push(["jk ↑↓", "scroll"])
+    }
+    if (canCycle) chips.push(["y o", "change page"])
+    chips.push(["f", "fullscreen"], ["q", "close"])
+    if (keys.focus) chips.push([keys.focus, "session"])
+  } else {
+    chips.push([keys.focus ? `click or ${keys.focus}` : "click", "to focus"])
+    if (keys.toggle) chips.push([keys.toggle, "close panel"])
+  }
+
+  const separator = "   "
+  const lines = []
+  let current = []
+  let used = 0
+  for (const [key, label] of chips) {
+    const chip = [seg(clean(key), "accent", true), seg(` ${label}`, "muted")]
+    const size = displayWidth(clean(key)) + 1 + displayWidth(label)
+    if (current.length && used + separator.length + size > columns) {
+      lines.push(current)
+      current = []
+      used = 0
+    }
+    if (current.length) {
+      current.push(seg(separator))
+      used += separator.length
+    }
+    current.push(...chip)
+    used += size
+  }
+  if (current.length) lines.push(current)
+  return lines.slice(0, Math.max(1, maxLines)).map((line) => fitLine(line, columns))
 }
 
 function field(label, value, role, columns, maxRows) {

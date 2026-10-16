@@ -1,4 +1,4 @@
-# opencode-questline
+# opencode-sidequest
 
 Agent DAGs for [OpenCode V2](https://opencode.ai/v2/docs/). The model hands
 OpenCode a dependency graph of sub-agent steps. Independent steps run in
@@ -38,7 +38,7 @@ The package is not published yet. Load it from a checkout by absolute path in
 
 ```jsonc
 {
-  "plugins": ["/absolute/path/to/opencode-questline"]
+  "plugins": ["/absolute/path/to/opencode-sidequest"]
 }
 ```
 
@@ -98,27 +98,93 @@ with the error `interrupted by restart`, and `dag_retry` continues it.
 
 ## The panel
 
+The side panel is one pane with up to four pages, and `y` (previous) and `o` (next) step through
+all of them, wrapping around. Session is OpenCode's own landing page: the session title, the
+context window use, and the MCP servers, built from the same data its sidebar uses. Graph draws
+the newest DAG, or one you picked in Runs, and needs a run in the session. Runs lists the
+session's runs and needs two or more. Help explains how to run a DAG, the keys, and the OpenCode
+keys that matter beside it.
+
+The pane belongs to OpenCode, not the plugin, so you resize it with the mouse: drag the light line
+on its left edge, and double-click the line to reset it. The width is remembered, and `f` toggles
+fullscreen. A plugin cannot set that width, so it opens at OpenCode's default, half the terminal,
+which is wide enough for a DAG's boxes to sit side by side. OpenCode's own sidebar is a fixed 42
+columns and has no handle, which is why the plugin replaces it instead of adding a section to it.
+
 | Situation | Behavior |
 | --- | --- |
-| A run starts in the session you are viewing | The panel opens, unless you dismissed it or the terminal is 80 columns or narrower |
-| The run finishes and you never touched the panel | The panel closes after about 8 seconds |
-| `<leader>d`, `/dag`, or the palette command | Toggles the panel and shows the newest run, running or not |
-| A session with no run | A toast says so |
-| You close the panel | It stays closed until a new run starts in that session |
-| You are viewing a step's child session | The panel can be toggled there and highlights the step; it never opens on its own |
-
-Keys while the panel has focus:
+| A run starts in the session you are viewing | The panel opens on the Graph page, unless you closed it for that run or the terminal is 80 columns or narrower |
+| The run finishes and you never touched the panel | The panel closes after about 8 seconds, but only if the plugin opened it |
+| You open it with `<leader>b` | It lands on the Graph page while a run is going, otherwise on the page you last used |
+| You switch session tabs | A panel you opened by hand follows you: OpenCode closes it on navigation and the plugin opens it again |
+| You close it, or something else takes the pane | It stays closed until a new run starts in that session |
+| You are viewing a step's session | The panel highlights the step; it never opens by itself there |
 
 | Key | Action |
 | --- | --- |
-| `j` / `k`, arrows | Move the selection |
-| `Enter` | Open the selected step's session |
-| `c` | Cancel the run, after a confirmation |
-| `r` | Retry a finished run |
-| `q`, `Esc` | Close the panel |
+| `<leader>b` | Show or hide the panel. This is OpenCode's sidebar toggle, which the dotfiles release for it. Also `/side-panel` |
+| `ctrl+g` | Move the cursor between the session and the panel, opening the panel first if it is closed |
+| `<leader>o` | From a step's session, go back to the session that started the DAG. Also `/dag-origin` and the palette |
+| `/dag` | Open the panel on the newest graph and move the cursor into it |
 
-Step glyphs: `○` pending, `●` running, `✓` completed, `×` failed, `·` skipped,
-`−` cancelled. The strip reads `dag <name>  2● 3/6 ✓  1×  1m20s   <leader>d graph`.
+While the panel has the cursor, arrows and `hjkl` always do the same thing:
+
+| Key | Graph | Runs | Session, Help |
+| --- | --- | --- | --- |
+| `j` / `k`, down / up | Move to the box below or above | Move the cursor | Scroll |
+| `h` / `l`, left / right | Move along a row of boxes | | |
+| `Enter` | Open the selected step inside the panel | Show that run in the graph | |
+| `y` / `o` | Previous / next page | Previous / next page | Previous / next page |
+| `c` / `r` | Cancel the run, after a confirmation / retry a finished run | | |
+| `f` | Toggle fullscreen | Toggle fullscreen | Toggle fullscreen |
+| `q`, `Esc` | Close the panel | Close the panel | Close the panel |
+
+`Enter` on a box opens that step inside the panel, under the Graph tab: its state, time and
+model, then its conversation, which refreshes while the step runs. A message box sits under the
+conversation, so you can answer a step without leaving the session that started the DAG:
+
+| Key in a step | Action |
+| --- | --- |
+| `j` / `k`, down / up | Scroll the conversation |
+| `i`, `Enter` | Start typing a message to the step; `Enter` sends it |
+| `Esc` | Stop typing, then go back to the graph, then close the panel |
+| `g` | Open the step's own session in OpenCode |
+| `y` / `o` | Leave the step and change page |
+| `q` | Close the panel |
+
+While you type, every plain key goes into the message, so `q`, `j` or `c` cannot act on the
+panel or the run. `c` and `r` do nothing inside a step and say so; go back to the graph first.
+A message continues the step's session but does not change the output the DAG already recorded
+for it. OpenCode's own view of a step replaces its prompt with a subagent picker, which is why the
+panel carries the message box.
+
+Clicking the MCP title on the Session page collapses the server list when there are more than
+two, and clicking a server opens OpenCode's MCP list. A step has no prompt of its own, so a typed
+command is not an option there and OpenCode's parent-session command does not fire inside a step;
+that is why `<leader>o` is a plugin command. Leave the leader on its default `ctrl+x` and keep
+`ctrl+g` free: OpenCode's default for "first message" is `ctrl+g,home`, so rebind it, for example
+`"session.first": "home,<leader>f"`, and set `"session.sidebar.toggle": "none"` so `<leader>b`
+reaches the plugin, and `"session.sidebar": "hide"`: with it on `auto`, OpenCode shows its own
+sidebar whenever the panel is closed, so `<leader>b` would only swap one pane for the other. The
+plugin never touches `<leader>h`, `j`, `k`, `l` or the arrows, which stay with session navigation.
+
+Key chords with a modified first key, such as `ctrl+g p`, do not work: OpenCode's key parser
+accepts only single keys, concatenated plain keys, and `<leader>` combinations, and an unparsed
+chord leaks its second key into the prompt.
+
+Each box shows the step's label, its state, the model it was asked to use
+(`◇ default model` when the step sets none), and its prerequisites: `after ✓ plan □ lint`
+lists each one with its own glyph, an empty box `□` for one that is not met yet, and
+`no deps` marks a step that starts first. Step glyphs: `○` pending, `●` running, `✓` completed,
+`×` failed, `·` skipped, `−` cancelled. The strip above the prompt reads
+`dag <name>  2● 3/6 ✓  1×  1m20s   ctrl+g panel`, and inside a step it adds the way back.
+
+Colors come from OpenCode's active theme (muted, accent, success, error, warning, and selected),
+so the panel follows a theme change with no palette of its own.
+
+The bottom of the panel keeps a reminder of the keys for the current page, written out as the
+keys you press. A key that OpenCode did not register is left out, so a key that does nothing is
+never shown.
 
 ## How it works
 
@@ -165,18 +231,21 @@ rules in effect when they are created.
 
 ## Limits and unverified behavior
 
-Everything here is covered by unit tests and a simulated host. Nobody has
-driven a real terminal with it yet.
+The scheduler and the panel logic are covered by unit tests and a simulated host. The terminal
+behavior below was driven through a real OpenCode client in an isolated tmux, as noted.
 
 | Area | Status |
 | --- | --- |
-| Focus returning to the composer after the panel opens | Sends `pane.focus.left` once; unverified in a real terminal |
-| `<leader>d` binding | Uses the host's string syntax; unverified |
-| Panel width and fullscreen fallback | Uses terminal width over 80; unverified under tmux and Ghostty |
-| Real model-driven runs | Not run; the scheduler is tested against a fake host |
+| Panel pages, `y` `o`, drag and double-click resize, fullscreen | Checked in a real terminal with an isolated tmux client, injecting mouse drags |
+| Opening a step in the panel, messaging it, `Esc` back out, `g` | Checked the same way: a typed message reached the step and its reply showed in the panel |
+| Auto-open on a run, auto-close, following across tabs, the `ctrl+g` flip, `<leader>b` | Checked the same way |
+| `<leader>o` from a step | Checked the same way; it is a plugin command because OpenCode's `session.parent` did not fire in a step's session |
+| Session page against OpenCode's sidebar | Same data and layout, checked by eye; it is a copy, so a change in OpenCode's sidebar will not follow |
+| Panel width on first open | OpenCode's default, half the terminal; a plugin cannot set it, and a width you dragged earlier is reused |
+| Real model-driven runs | A five-step diamond ran live on `gpt-6-luna` from an isolated client; long runs, other providers, and permission prompts inside steps are not covered |
 | `session.wait` timing against `outcome` | Checked in types and source only |
 | Concurrent metadata writers | The origin summary is a read-merge-write and can lose an update |
-| Auto-open | Replaces any other plugin's panel in that session; the API cannot detect one |
+| Another plugin's panel | Opening the plugin's panel replaces it, and the API cannot detect one |
 | Strip in a child session | Also shown there |
 
 ## Development
@@ -186,6 +255,28 @@ npm install
 npm test
 npm run typecheck
 ```
+
+Linting and the other checks run through [prek](https://prek.j178.dev/), locally on
+every commit and in CI. The type check and the tests are hooks too, so run
+`npm install` first.
+
+```sh
+uv tool install prek==0.5.4
+prek install --overwrite
+prek run --all-files
+```
+
+| Hook | Checks |
+| --- | --- |
+| gitleaks | Secrets in staged content |
+| pre-commit-hooks | Whitespace, end of file, YAML and JSON syntax, merge markers, large files |
+| actionlint | GitHub Actions workflows |
+| markdownlint-cli2 | Markdown, configured in `.markdownlint.yaml` |
+| biome-ci | TypeScript and JavaScript lint rules, configured in `biome.jsonc`; read-only, with the formatter off |
+| typecheck, test | `tsc --noEmit` and the `node:test` suites |
+
+CI runs the same hooks from `.github/workflows/ci.yaml`, which calls the reusable
+`.github/workflows/prek.yaml`.
 
 | File | Role |
 | --- | --- |

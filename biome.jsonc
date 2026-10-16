@@ -1,0 +1,17 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  // Lint only. The repo's style (no semicolons, double quotes) is kept by hand and
+  // by review; turning the formatter on would rewrite every file.
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "files": { "includes": ["**/*.ts", "**/*.tsx", "**/*.mjs", "!node_modules"] },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      // The JSX is OpenTUI (terminal) elements, not HTML, so web accessibility rules
+      // such as noStaticElementInteractions do not apply to <box onMouseUp>.
+      "a11y": { "noStaticElementInteractions": "off" }
+    }
+  }
+}
