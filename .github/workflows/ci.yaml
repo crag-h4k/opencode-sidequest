@@ -2,8 +2,8 @@
 ---
 name: ci
 
-# Both triggers run prek. Successful main pushes also update the release PR
-# or create the tag and GitHub release after that PR is merged.
+# Both triggers run prek. Main pushes also run Release Please and stage new
+# releases on npm once trusted publishing is configured.
 on:
   push:
     branches: [main]
@@ -29,10 +29,48 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Open or update the release PR
+        id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ secrets.RELEASE_PLEASE_CI }}
           config-file: .github/release-please/config.json
           manifest-file: .github/release-please/manifest.json
+
+  # npm registers ci.yaml as the trusted publisher; keep this job here.
+  publish:
+    name: Stage on npm
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true' && vars.NPM_TRUSTED_PUBLISHING == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - run: npm install --global npm@11.20.0
+
+      - run: npm ci --ignore-scripts
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      - name: Stage the release
+        run: npm stage publish
