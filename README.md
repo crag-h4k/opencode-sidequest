@@ -11,6 +11,7 @@ Developed against OpenCode 2.0.29 and its plugin API.
 
 - [What it adds](#what-it-adds)
 - [Install](#install)
+  - [From a checkout](#from-a-checkout)
 - [Running a DAG](#running-a-dag)
 - [The panel](#the-panel)
   - [Focus shortcut](#focus-shortcut)
@@ -36,8 +37,23 @@ Developed against OpenCode 2.0.29 and its plugin API.
 
 ## Install
 
-The package is not published yet. Load it from a checkout by absolute path in
-`~/.config/opencode/opencode.jsonc`:
+Install [Sidequest from npm](https://www.npmjs.com/package/opencode-sidequest)
+by adding it to `~/.config/opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["opencode-sidequest@0.1.0"]
+}
+```
+
+OpenCode installs the package automatically. Terminal clients also load its
+`./tui` export; other clients load only the server half. Restart OpenCode after
+changing the plugin configuration.
+
+### From a checkout
+
+For local development, replace the package spec with the checkout's absolute path:
 
 ```jsonc
 {
@@ -52,8 +68,7 @@ checkout first:
 npm install
 ```
 
-Restart OpenCode after changing the plugin. Terminal clients load the `./tui`
-export; other clients load only the server half.
+Restart OpenCode after changing the plugin.
 
 ## Running a DAG
 
@@ -346,9 +361,8 @@ PR from Conventional Commits. Merging that PR and passing CI creates the version
 tag and GitHub release. The first release is `0.1.0`.
 
 See [RELEASING.md](RELEASING.md) for versioning and the shared `RELEASE_PLEASE_CI`
-credential. After the first manual npm publication and trusted-publisher setup,
-CI stages later releases on npm for maintainer approval with 2FA. Until the first
-publication, installation remains from a checkout as described above.
+credential. Version `0.1.0` is published on npm. Trusted-publisher setup is pending;
+once configured, CI stages later releases for maintainer approval with 2FA.
 
 ## Related projects
 
