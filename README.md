@@ -346,8 +346,9 @@ PR from Conventional Commits. Merging that PR and passing CI creates the version
 tag and GitHub release. The first release is `0.1.0`.
 
 See [RELEASING.md](RELEASING.md) for versioning and the shared `RELEASE_PLEASE_CI`
-credential. This workflow does not publish to npm; installation remains from a
-checkout as described above.
+credential. After the first manual npm publication and trusted-publisher setup,
+CI stages later releases on npm for maintainer approval with 2FA. Until the first
+publication, installation remains from a checkout as described above.
 
 ## Related projects
 

@@ -34,6 +34,8 @@ repos:
     rev: v0.23.3
     hooks:
       - id: markdownlint-cli2
+        # Release Please owns the changelog's formatting.
+        exclude: ^CHANGELOG\.md$
 
   # Lint only: biome.jsonc turns the formatter and import sorting off, and biome-ci
   # never writes. Keep the rev and the pinned package in step.

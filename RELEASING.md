@@ -1,7 +1,8 @@
 # Releasing
 
 Release Please maintains the release PR, version files, changelog, Git tag, and
-GitHub release. npm publication is not configured.
+GitHub release. The publish job stages new releases on npm using OIDC trusted
+publishing. A maintainer approves each staged version with 2FA before it goes live.
 
 ## Release flow
 
@@ -32,6 +33,46 @@ only applies before the first release; later versions follow Conventional Commit
 Fixes increment the patch version and features increment the minor version.
 With `bump-minor-pre-major` enabled, breaking changes also increment the minor
 version while the package is below `1.0.0`.
+
+## First npm release
+
+The first version must exist on npm before its trusted publisher can be configured.
+Publish `0.1.0` from a clean checkout of the Release Please tag using the maintainer's
+npm login and 2FA. Install with `npm ci --ignore-scripts`, run `npm run typecheck`
+and `npm test`, then inspect `npm pack --dry-run` before publishing with
+`npm publish`. This initial local publish has no CI provenance.
+
+Keep `NPM_TRUSTED_PUBLISHING` unset during this bootstrap so the publish job skips.
+The package name is `opencode-sidequest`; its public repository is
+`crag-h4k/opencode-sidequest`.
+
+## Trusted publishing
+
+Configure the package's trusted publisher on npmjs.com just before the next
+release. A new configuration expires unless it completes its first successful
+publish within two days.
+
+| Setting | Value |
+| --- | --- |
+| Provider | GitHub Actions |
+| Organization or user | `crag-h4k` |
+| Repository | `opencode-sidequest` |
+| Workflow filename | `ci.yaml` |
+| Environment | `npm` |
+| Allowed actions | Staged publishing only |
+
+Set the npm package's publishing access to require 2FA and disallow tokens, then
+set the GitHub repository variable `NPM_TRUSTED_PUBLISHING` to `true`.
+
+The publish job runs on a GitHub-hosted runner, checks out the release tag,
+installs from the lockfile without caches, typechecks, tests, and runs
+`npm stage publish`. Keep it in `ci.yaml`, which is the workflow filename registered
+with npm. OIDC supplies authentication; no npm token is needed in GitHub secrets.
+Public releases through this workflow receive npm provenance automatically.
+
+After merging each later release PR, wait for the main-push CI run's
+`Stage on npm` job. Review and approve the version in npm's Staged Packages tab
+using 2FA. The GitHub release alone does not mean the package is live on npm.
 
 ## Release credential
 
