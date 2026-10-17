@@ -1,8 +1,9 @@
 # Releasing
 
 Release Please maintains the release PR, version files, changelog, Git tag, and
-GitHub release. The publish job stages new releases on npm using OIDC trusted
-publishing. A maintainer approves each staged version with 2FA before it goes live.
+GitHub release. Version `0.1.0` is published on npm. The OIDC publish job is
+implemented but remains disabled until trusted-publisher setup is complete.
+Once enabled, a maintainer approves each staged version with 2FA before it goes live.
 
 ## Release flow
 
@@ -20,11 +21,9 @@ pull-request checks use read-only permissions.
 
 ## Initial version and later releases
 
-The package is currently an unreleased `0.1.0`. The empty
-`.github/release-please/manifest.json` records that no release has been made, and
-`initial-version` in `.github/release-please/config.json` sets the first release
-to `0.1.0`. The first changelog includes the repository's existing Conventional
-Commits.
+The first release is `0.1.0`, recorded in
+`.github/release-please/manifest.json`. The `initial-version` setting in
+`.github/release-please/config.json` controlled that bootstrap release.
 
 Release Please writes the released version into the manifest and updates
 `package.json`, `package-lock.json`, and `CHANGELOG.md` through its release PR.
@@ -36,15 +35,13 @@ version while the package is below `1.0.0`.
 
 ## First npm release
 
-The first version must exist on npm before its trusted publisher can be configured.
-Publish `0.1.0` from a clean checkout of the Release Please tag using the maintainer's
-npm login and 2FA. Install with `npm ci --ignore-scripts`, run `npm run typecheck`
-and `npm test`, then inspect `npm pack --dry-run` before publishing with
-`npm publish`. This initial local publish has no CI provenance.
+Version `0.1.0` was published from the `v0.1.0` tag after typechecking, tests,
+tarball inspection, and an isolated OpenCode load check. This initial publication
+used maintainer authentication and has no CI provenance.
 
-Keep `NPM_TRUSTED_PUBLISHING` unset during this bootstrap so the publish job skips.
 The package name is `opencode-sidequest`; its public repository is
-`crag-h4k/opencode-sidequest`.
+`crag-h4k/opencode-sidequest`. Keep `NPM_TRUSTED_PUBLISHING` unset until the
+trusted publisher is configured for the next release.
 
 ## Trusted publishing
 
