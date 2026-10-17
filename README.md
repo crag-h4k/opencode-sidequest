@@ -19,6 +19,7 @@ Developed against OpenCode 2.0.29 and its plugin API.
 - [Limits and unverified behavior](#limits-and-unverified-behavior)
 - [Development](#development)
 - [Releases](#releases)
+- [Related projects](#related-projects)
 - [License](#license)
 
 ## What it adds
@@ -123,7 +124,7 @@ columns and has no handle, which is why the plugin replaces it instead of adding
 
 | Key | Action |
 | --- | --- |
-| `<leader>b` | Show or hide the panel. This is OpenCode's sidebar toggle, which the dotfiles release for it. Also `/side-panel` |
+| `<leader>b` | Show or hide the panel. Free OpenCode's sidebar toggle as described below. Also `/side-panel` |
 | `ctrl+g` | Move the cursor between the session and the panel, opening the panel first if it is closed |
 | `<leader>o` | From a step's session, go back to the session that started the DAG. Also `/dag-origin` and the palette |
 | `/dag` | Open the panel on the newest graph and move the cursor into it |
@@ -249,6 +250,16 @@ behavior below was driven through a real OpenCode client in an isolated tmux, as
 | Another plugin's panel | Opening the plugin's panel replaces it, and the API cannot detect one |
 | Strip in a child session | Also shown there |
 
+One user reports that pressing `Enter` to submit a message in the step panel can
+switch the main pane to that child session, with no intervening focus change.
+This remains unresolved: isolated OpenCode 2.0.29 and 2.0.32 checks did not
+reproduce the switch. Use `<leader>o` or **Go to the DAG's origin session** in
+the command palette (`/dag-origin`) to return to the parent session if it happens.
+
+Separately, tests confirmed that moving focus away from a step's message box
+with `ctrl+g` and back can leave `Enter` unresponsive. That is a distinct issue,
+not a reproduction of the reported session switch.
+
 ## Development
 
 ```sh
@@ -302,6 +313,17 @@ tag and GitHub release. The first release is `0.1.0`.
 See [RELEASING.md](RELEASING.md) for versioning and the shared `RELEASE_PLEASE_CI`
 credential. This workflow does not publish to npm; installation remains from a
 checkout as described above.
+
+## Related projects
+
+- [opencode-pillbox-statusline](https://github.com/crag-h4k/opencode-pillbox-statusline)
+  adds a configurable footer. Its optional `sidequest` pill shows DAG progress
+  alongside context, cost, and provider quota.
+- [dotfiles](https://github.com/crag-h4k/dotfiles) manages a selective macOS and
+  Debian workstation with chezmoi, shared terminal palettes, and OpenCode tooling.
+
+Sidequest works independently of both projects. Use your own OpenCode
+configuration and the keybindings described in [The panel](#the-panel).
 
 ## License
 
