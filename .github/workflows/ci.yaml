@@ -2,7 +2,8 @@
 ---
 name: ci
 
-# Both triggers call the same reusable workflow, so there is one prek run per push.
+# Both triggers run prek. Successful main pushes also update the release PR
+# or create the tag and GitHub release after that PR is merged.
 on:
   push:
     branches: [main]
@@ -14,3 +15,24 @@ permissions:
 jobs:
   prek:
     uses: ./.github/workflows/prek.yaml
+
+  release-please:
+    name: Release Please
+    needs: prek
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Open or update the release PR
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_CI }}
+          config-file: .github/release-please/config.json
+          manifest-file: .github/release-please/manifest.json

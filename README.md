@@ -18,6 +18,7 @@ Developed against OpenCode 2.0.29 and its plugin API.
 - [Permissions and cost](#permissions-and-cost)
 - [Limits and unverified behavior](#limits-and-unverified-behavior)
 - [Development](#development)
+- [Releases](#releases)
 - [License](#license)
 
 ## What it adds
@@ -291,6 +292,16 @@ CI runs the same hooks from `.github/workflows/ci.yaml`, which calls the reusabl
 Tests need `typescript` to load the server plugin. One test decodes every
 emitted run against the real RPC schemas and needs `@opencode/plugin`
 installed, so it is skipped without `npm install`.
+
+## Releases
+
+After prek passes on a push to `main`, Release Please opens or updates a release
+PR from Conventional Commits. Merging that PR and passing CI creates the version
+tag and GitHub release. The first release is `0.1.0`.
+
+See [RELEASING.md](RELEASING.md) for versioning and the shared `RELEASE_PLEASE_CI`
+credential. This workflow does not publish to npm; installation remains from a
+checkout as described above.
 
 ## License
 
