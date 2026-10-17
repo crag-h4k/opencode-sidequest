@@ -13,6 +13,7 @@ Developed against OpenCode 2.0.29 and its plugin API.
 - [Install](#install)
 - [Running a DAG](#running-a-dag)
 - [The panel](#the-panel)
+  - [Focus shortcut](#focus-shortcut)
 - [How it works](#how-it-works)
 - [Other clients](#other-clients)
 - [Permissions and cost](#permissions-and-cost)
@@ -125,7 +126,7 @@ columns and has no handle, which is why the plugin replaces it instead of adding
 | Key | Action |
 | --- | --- |
 | `<leader>b` | Show or hide the panel. Free OpenCode's sidebar toggle as described below. Also `/side-panel` |
-| `ctrl+g` | Move the cursor between the session and the panel, opening the panel first if it is closed |
+| `ctrl+g` (default) | Move the cursor between the session and the panel, opening the panel first if it is closed. Configurable with `focusKey` below |
 | `<leader>o` | From a step's session, go back to the session that started the DAG. Also `/dag-origin` and the palette |
 | `/dag` | Open the panel on the newest graph and move the cursor into it |
 
@@ -163,12 +164,45 @@ panel carries the message box.
 Clicking the MCP title on the Session page collapses the server list when there are more than
 two, and clicking a server opens OpenCode's MCP list. A step has no prompt of its own, so a typed
 command is not an option there and OpenCode's parent-session command does not fire inside a step;
-that is why `<leader>o` is a plugin command. Leave the leader on its default `ctrl+x` and keep
-`ctrl+g` free: OpenCode's default for "first message" is `ctrl+g,home`, so rebind it, for example
-`"session.first": "home,<leader>f"`, and set `"session.sidebar.toggle": "none"` so `<leader>b`
-reaches the plugin, and `"session.sidebar": "hide"`: with it on `auto`, OpenCode shows its own
-sidebar whenever the panel is closed, so `<leader>b` would only swap one pane for the other. The
-plugin never touches `<leader>h`, `j`, `k`, `l` or the arrows, which stay with session navigation.
+that is why `<leader>o` is a plugin command. With the default focus key, keep `ctrl+g` free:
+OpenCode also binds it to "first message", so set `"session.first": "home"` in `cli.json`.
+Set `"session.sidebar.toggle": "none"` so `<leader>b` reaches the plugin, and set
+`session.sidebar` to `"hide"`. With it on `"auto"`, OpenCode shows its own sidebar whenever
+the panel is closed. The plugin does not bind leader-plus-direction keys; plain arrows and
+`hjkl` navigate the panel only while it has focus.
+
+### Focus shortcut
+
+`focusKey` is a terminal plugin option, read from the `cli.json` plugin entry. It defaults
+to `"ctrl+g"`. If you use `ctrl+g` as OpenCode's leader, choose `"<leader>p"` instead:
+
+```json
+{
+  "plugins": [
+    {
+      "package": "/absolute/path/to/opencode-sidequest",
+      "options": { "focusKey": "<leader>p" }
+    }
+  ],
+  "keybinds": {
+    "leader": "ctrl+g",
+    "session.first": "home",
+    "session.sidebar.toggle": "none"
+  },
+  "session": { "sidebar": "hide" }
+}
+```
+
+Press Ctrl+G, then P to open the panel or switch focus between it and the session.
+Use the exact same package reference in `cli.json` and `opencode.jsonc`, whether that is
+a checkout path or a pinned package reference. OpenCode loads the TUI from the server
+declaration automatically; the matching CLI entry supplies its terminal options and is
+deduplicated, so it does not load a second copy. Setting `focusKey` only in `opencode.jsonc`
+does not configure the terminal half. Preserve any other entries in both plugin arrays.
+
+The footer and Help page use OpenCode's resolved shortcut, so they show the configured
+leader key. OpenCode 2.0.32 rejects plugin command IDs in `cli.json.keybinds`; configure
+`options.focusKey`, not a `keybinds["sidequest.dag.focus"]` entry.
 
 Key chords with a modified first key, such as `ctrl+g p`, do not work: OpenCode's key parser
 accepts only single keys, concatenated plain keys, and `<leader>` combinations, and an unparsed
@@ -241,6 +275,7 @@ behavior below was driven through a real OpenCode client in an isolated tmux, as
 | Panel pages, `y` `o`, drag and double-click resize, fullscreen | Checked in a real terminal with an isolated tmux client, injecting mouse drags |
 | Opening a step in the panel, messaging it, `Esc` back out, `g` | Checked the same way: a typed message reached the step and its reply showed in the panel |
 | Auto-open on a run, auto-close, following across tabs, the `ctrl+g` flip, `<leader>b` | Checked the same way |
+| `focusKey: "<leader>p"` with a Ctrl+G leader | Checked in OpenCode 2.0.32 with an isolated tmux client: opens the panel, switches focus both ways, and updates footer and Help shortcuts |
 | `<leader>o` from a step | Checked the same way; it is a plugin command because OpenCode's `session.parent` did not fire in a step's session |
 | Session page against OpenCode's sidebar | Same data and layout, checked by eye; it is a copy, so a change in OpenCode's sidebar will not follow |
 | Panel width on first open | OpenCode's default, half the terminal; a plugin cannot set it, and a width you dragged earlier is reused |
@@ -317,8 +352,9 @@ checkout as described above.
 ## Related projects
 
 - [opencode-pillbox-statusline](https://github.com/crag-h4k/opencode-pillbox-statusline)
-  adds a configurable footer. Its optional `sidequest` pill shows DAG progress
-  alongside context, cost, and provider quota.
+  adds a configurable footer for context, cost, and provider quota. Its optional
+  `sidequest` pill has no data adapter yet, so enabling it does not display DAG
+  progress. Sidequest supplies its own progress strip above the prompt.
 - [dotfiles](https://github.com/crag-h4k/dotfiles) manages a selective macOS and
   Debian workstation with chezmoi, shared terminal palettes, and OpenCode tooling.
 

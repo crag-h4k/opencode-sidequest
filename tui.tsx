@@ -458,7 +458,7 @@ function Host(props: { ctl: Controller }) {
         title: "Focus side panel",
         description: "Move the cursor between the session and the side panel, opening the panel if it is closed",
         group: "DAG",
-        bind: "ctrl+g",
+        bind: typeof context.options.focusKey === "string" ? context.options.focusKey : "ctrl+g",
         palette: true,
         run: () => {
           void ctl.flip()
