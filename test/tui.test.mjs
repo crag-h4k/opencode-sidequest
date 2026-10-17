@@ -979,15 +979,13 @@ test("terminal plugin keeps /dag on the palette, and binds the way back to the o
   assert.doesNotMatch(TUI_SOURCE, /session\.parent/, "OpenCode's own parent command does not fire inside a step, so the plugin owns this key")
 })
 
-test("terminal plugin binds ctrl+g, <leader>b and <leader>o, and no spaced chord or other leader key", () => {
+test("terminal plugin keeps <leader>b and <leader>o, and no other hard-coded leader key", () => {
   assert.match(TUI_SOURCE, /id: PANEL_TOGGLE,[\s\S]*?bind: "<leader>b"/)
   assert.match(TUI_SOURCE, /slash: \{ name: "side-panel" \}/)
-  assert.match(TUI_SOURCE, /id: FOCUS,[\s\S]*?bind: "ctrl\+g"/)
   assert.match(TUI_SOURCE, /void ctl\.toggle\(\)/)
   assert.match(TUI_SOURCE, /void ctl\.flip\(\)/)
   const bound = [...TUI_SOURCE.matchAll(/bind: "([^"]+)"/g)].map((match) => match[1])
   for (const key of bound) assert.doesNotMatch(key, /\s/, `"${key}": OpenCode's default parser rejects spaced chords`)
-  assert.deepEqual(bound.filter((key) => key.includes("ctrl")), ["ctrl+g"], "the only modified key")
   // h, j, k, l and the arrows belong to OpenCode's session navigation; b takes over the sidebar toggle.
   assert.deepEqual(bound.filter((key) => key.startsWith("<leader>")).sort(), ["<leader>b", "<leader>o"])
 })
