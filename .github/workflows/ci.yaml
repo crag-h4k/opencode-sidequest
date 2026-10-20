@@ -68,9 +68,15 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
+      - run: npm run build
+
       - run: npm run typecheck
 
       - run: npm test
+
+      # Packs the tarball and checks what would ship: a compiled ./tui export
+      # whose imports all resolve. Fails before anything is staged on npm.
+      - run: npm run verify-pack
 
       - name: Stage the release
         run: npm stage publish
