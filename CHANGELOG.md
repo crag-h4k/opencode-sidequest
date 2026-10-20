@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/crag-h4k/opencode-sidequest/compare/v0.1.0...v0.1.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **tui:** compile the panel for npm and verify the tarball before staging ([#7](https://github.com/crag-h4k/opencode-sidequest/issues/7)) ([91549de](https://github.com/crag-h4k/opencode-sidequest/commit/91549deb7fb108a50238f08645393306f1e8adc7))
+
 ## 0.1.0 (2026-10-17)
 
 
