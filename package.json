@@ -1,6 +1,6 @@
 {
   "name": "opencode-sidequest",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent DAGs for OpenCode V2: a dependency graph of sub-agent steps with a live per-session terminal panel",
   "type": "module",
   "license": "MIT",
