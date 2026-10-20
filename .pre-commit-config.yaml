@@ -60,3 +60,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(.*\.(ts|tsx|mjs)|package(-lock)?\.json)$
+
+      - id: verify-pack
+        name: the packed tarball ships the compiled terminal half
+        entry: npm run verify-pack
+        language: system
+        pass_filenames: false
+        files: ^(.*\.(ts|tsx|mjs)|package(-lock)?\.json)$

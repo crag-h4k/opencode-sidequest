@@ -19,12 +19,13 @@
   ],
   "exports": {
     ".": "./index.ts",
-    "./tui": "./tui.tsx",
+    "./tui": "./dist/tui.js",
     "./rpc": "./rpc.ts"
   },
   "files": [
     "index.ts",
     "tui.tsx",
+    "dist/",
     "rpc.ts",
     "dag.mjs",
     "layout.mjs",
@@ -34,7 +35,10 @@
   ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "verify-pack": "node scripts/verify-pack.mjs",
+    "prepack": "npm run build"
   },
   "peerDependencies": {
     "@opencode/plugin": ">=2.0.26",

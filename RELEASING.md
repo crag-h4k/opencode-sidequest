@@ -62,7 +62,8 @@ Set the npm package's publishing access to require 2FA and disallow tokens, then
 set the GitHub repository variable `NPM_TRUSTED_PUBLISHING` to `true`.
 
 The publish job runs on a GitHub-hosted runner, checks out the release tag,
-installs from the lockfile without caches, typechecks, tests, and runs
+installs from the lockfile without caches, builds the compiled terminal half,
+typechecks, tests, checks the packed tarball with `npm run verify-pack`, and runs
 `npm stage publish`. Keep it in `ci.yaml`, which is the workflow filename registered
 with npm. OIDC supplies authentication; no npm token is needed in GitHub secrets.
 Public releases through this workflow receive npm provenance automatically.
